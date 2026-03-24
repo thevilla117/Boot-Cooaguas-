@@ -1,7 +1,8 @@
 FROM node:18-bullseye-slim
 
-# Instalar las librerías necesarias del sistema para que Chromium funcione sin problemas
+# Instalar chromium directamente desde los repositorios de Debian y todas sus librerías de interfaz
 RUN apt-get update && apt-get install -y \
+    chromium \
     ca-certificates \
     fonts-liberation \
     libappindicator3-1 \
@@ -45,7 +46,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY package*.json ./
-# Puppeteer descargará su propio Chromium internamente durante npm install
+
+# Saltarnos la descarga rota de puppeteer y usar el de sistema
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
 RUN npm install
 
 COPY . .
