@@ -19,7 +19,7 @@ EXPOSE 3000
 
 # Se asegura que puppeteer use el chromium precargado en la imagen
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 # Comando de inicio
 CMD ["npm", "start"]
