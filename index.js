@@ -11,20 +11,18 @@ app.get('/', (req, res) => res.send('Bot de WhatsApp funcionando en la nube 🚀
 app.listen(port, () => console.log(`\n🌐 Servidor web escuchando en el puerto ${port}`));
 
 // --- 2. CONFIGURACIÓN DEL BOT ---
+const os = require('os');
+const isLinux = os.platform() === 'linux';
+
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
-        dumpio: true,
-        args: [
-            '--no-sandbox', 
-            '--disable-setuid-sandbox', 
-            '--disable-dev-shm-usage', 
-            '--disable-gpu',
-            '--no-zygote',
-            '--single-process'
-        ]
+        dumpio: isLinux,
+        args: isLinux 
+            ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote', '--single-process']
+            : ['--no-sandbox', '--disable-setuid-sandbox'] // En Windows no usamos single-process para que no crashee
     }
 });
 
