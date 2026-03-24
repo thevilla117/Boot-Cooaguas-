@@ -1,12 +1,21 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { consultarCliente, agendarCita } = require('./api');
+const express = require('express');
+
+// --- 1. CONFIGURACIÓN DEL SERVIDOR WEB (Obligatorio para Web Services de Render) ---
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.get('/', (req, res) => res.send('Bot de WhatsApp funcionando en la nube 🚀'));
+app.listen(port, () => console.log(`\n🌐 Servidor web escuchando en el puerto ${port}`));
 
 // --- 2. CONFIGURACIÓN DEL BOT ---
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     }
 });
