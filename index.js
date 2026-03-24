@@ -16,13 +16,29 @@ const isLinux = os.platform() === 'linux';
 
 const client = new Client({
     authStrategy: new LocalAuth(),
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+    },
     puppeteer: {
         headless: true,
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
         dumpio: isLinux,
         args: isLinux 
-            ? ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-zygote', '--single-process']
-            : ['--no-sandbox', '--disable-setuid-sandbox'] // En Windows no usamos single-process para que no crashee
+            ? [
+                '--no-sandbox', 
+                '--disable-setuid-sandbox', 
+                '--disable-dev-shm-usage', 
+                '--disable-gpu', 
+                '--no-zygote', 
+                '--single-process',
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+              ]
+            : [
+                '--no-sandbox', 
+                '--disable-setuid-sandbox',
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+              ] 
     }
 });
 
@@ -94,7 +110,10 @@ client.on('loading_screen', (percent, message) => {
 });
 
 client.on('authenticated', () => {
-    console.log('\n✔ Autenticado correctamente con WhatsApp.\n');
+    console.log('\n✔ Autenticado correctamente con WhatsApp. ¡Tu teléfono ya vinculó el bot!');
+    console.log('⏳ ADVERTENCIA RENDER: Descargando y sincronizando historial de chats...');
+    console.log('⏳ Esto puede tardar varios minutos extra en aparecer debido a la memoria de Render.');
+    console.log('⏳ Solo espera aquí sin hacer nada hasta ver el mensaje de: BOT CONECTADO Y ACTIVO.\n');
 });
 
 client.on('auth_failure', (msg) => {
