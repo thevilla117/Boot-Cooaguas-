@@ -1,14 +1,61 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { consultarCliente, agendarCita } = require('./api');
+const { interpretarFecha, formatearParaAPI, esHoraValida } = require('./utils');
 const express = require('express');
 
 // --- 1. CONFIGURACIÓN DEL SERVIDOR WEB (Obligatorio para Web Services de Render) ---
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3005;
 
 app.get('/', (req, res) => res.send('Bot de WhatsApp funcionando en la nube 🚀'));
-app.listen(port, () => console.log(`\n🌐 Servidor web escuchando en el puerto ${port}`));
+
+// Middleware para permitir que la página web (localhost:5173) hable con el bot (localhost:3005)
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
+// NUEVO: Endpoint para que el Web Admin mande notificaciones manuales
+app.post('/api/notificar', express.json(), async (req, res) => {
+    const { numero, mensaje } = req.body;
+    console.log(`\n📧 Recibida orden de notificación para: ${numero}`);
+    
+    if (!numero || !mensaje) return res.status(400).json({ error: 'Faltan datos' });
+
+    try {
+        // Verificar si el bot está listo para enviar
+        if (!client.info || !client.info.wid) {
+            console.log("❌ Intento de envío fallido: El bot no ha iniciado sesión o no está 'Ready'.");
+            return res.status(503).json({ error: 'El bot no ha iniciado sesión de WhatsApp todavía.' });
+        }
+
+        // Limpiar el número (quitar +, espacios, etc)
+        let num = numero.replace(/\D/g, '');
+        
+        // Si es un número colombiano (10 dígitos) y no tiene el prefijo 57, se lo ponemos
+        if (num.length === 10 && !num.startsWith('57')) {
+            num = '57' + num;
+            console.log(`📌 Se añadió prefijo 57 al número: ${num}`);
+        }
+
+        if (!num.includes('@c.us')) num += '@c.us';
+
+        console.log(`📤 Intentando enviar mensaje a: ${num}`);
+        console.log(`📝 Contenido: "${mensaje.substring(0, 50)}..."`);
+        
+        await client.sendMessage(num, mensaje);
+        console.log("✅ Mensaje enviado exitosamente a WhatsApp.");
+        res.json({ success: true });
+    } catch (e) {
+        console.error("❌ Error enviando mensaje:", e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.listen(port, () => console.log(`\n🌐 Servidor de comandos del Bot escuchando en el puerto ${port}`));
 
 // --- 2. CONFIGURACIÓN DEL BOT ---
 const os = require('os');
@@ -46,7 +93,7 @@ const client = new Client({
 let sesiones = {};
 
 // Chats en modo humano: el bot NO responderá en estos chats
-// hasta que el asesor escriba !liberar o pasen 10 minutos
+// hasta que el asesor escriba !atendido o pasen 10 minutos
 const chatsModoHumano = new Set();
 
 // Timers de los chats en modo humano (para el auto-cierre)
@@ -57,7 +104,7 @@ const TIMEOUT_HUMANO_MS = 10 * 60 * 1000; // 10 minutos
 // Filtro Anti-Spam
 const controlSpam = new Map();
 
-// Libera un chat del modo humano (usado tanto por !liberar como por timeout)
+// Libera un chat del modo humano (usado tanto por !atendido como por timeout)
 const liberarChat = async (chat, porTimeout = false) => {
     if (!chatsModoHumano.has(chat)) return;
 
@@ -153,8 +200,8 @@ client.on('message', async (msg) => {
         const bienvenida = "💧 *BIENVENIDO A COOAGUAS DE CHOCHÓ*\n\n" +
             "¿En qué podemos ayudarte hoy?\n\n" +
             "1️⃣ *Consultar Factura* (Saldo y fechas)\n" +
-            "2️⃣ *Reportar Daño o Agendar Revisión*\n" +
-            "3️⃣ *Atención al Cliente*\n\n" +
+            "2️⃣ *Agendar cita de revisión*\n" +
+            "3️⃣ *Atención al Cliente o reportar daños*\n\n" +
             "*(Responde con el número de la opción)*";
         await msg.reply(bienvenida);
         sesiones[chat] = { paso: 'menu_principal' };
@@ -178,8 +225,8 @@ client.on('message', async (msg) => {
                 await msg.reply("🔍 Por favor, digite su *Código de Cliente*.");
                 sesiones[chat].paso = 'consultando_factura';
             } else if (texto === '2') {
-                await msg.reply("🛠️ *SOPORTE TÉCNICO COOAGUAS*\n\n¿Qué tipo de solicitud desea realizar?\n\n1️⃣ Reportar fuga o daño urgente\n2️⃣ Agendar revisión general\n\n*(Responda 1 o 2)*");
-                sesiones[chat].paso = 'tipo_soporte';
+                await msg.reply("🗓️ *PROGRAMACIÓN DE CITA*\n\n👤 Por favor, indíquenos su *Nombre Completo* para registrar la visita.");
+                sesiones[chat].paso = 'recibiendo_nombre_soporte';
             } else if (texto === '3') {
                 // El bot se pausa: modo humano activado para este chat
                 chatsModoHumano.add(chat);
@@ -278,58 +325,51 @@ client.on('message', async (msg) => {
             }
             break;
 
-        case 'recibiendo_fecha_revision':
-            const regexFecha = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/202[6-9] ([01][0-9]|2[0-3]):[0-5][0-9]$/;
-            if (!regexFecha.test(msg.body.trim())) {
-                await msg.reply('⚠️ El formato de la fecha es incorrecto.\n\nPor favor, escríbalo exactamente así: DD/MM/AAAA HH:MM\n(Ejemplo: 25/03/2026 10:00)');
-                return;
-            }
-            sesiones[chat].fechaAgendada = msg.body.trim();
-            await msg.reply("📍 Por favor envíenos la *dirección exacta* donde se realizará la revisión.");
+        case 'recibiendo_nombre_soporte':
+            sesiones[chat].nombreCita = msg.body.trim();
+            await msg.reply("📍 Ahora, por favor envíanos la *dirección exacta* para la visita.");
             sesiones[chat].paso = 'recibiendo_direccion_soporte';
             break;
 
         case 'recibiendo_direccion_soporte':
-            try {
-                const direccion = msg.body.trim();
-                
-                await msg.reply("⏳ Consultando sistema...");
+            sesiones[chat].direccionCita = msg.body.trim();
+            await msg.reply("📱 Por último, indícanos un *número de teléfono* de contacto (celular o fijo).");
+            sesiones[chat].paso = 'recibiendo_telefono_soporte';
+            break;
 
-                const tipoSoporte = sesiones[chat].tipo;
-                const fechaHora = sesiones[chat].fechaAgendada || undefined;
+        case 'recibiendo_telefono_soporte':
+            try {
+                const telefonoContacto = msg.body.trim();
+                const direccionOriginal = sesiones[chat].direccionCita;
+                const nombre = sesiones[chat].nombreCita || 'Sin Nombre';
                 
+                // Unimos nombre y dirección para que el backend lo guarde junto si no tiene columna de nombre
+                const direccionFinal = `${direccionOriginal} (A nombre de: ${nombre})`;
+
+                await msg.reply("⏳ Generando solicitud... por favor espere.");
+
                 const payload = {
                     nuid: sesiones[chat].nuid || null,
-                    telefono: msg.from,
-                    tipo: tipoSoporte,
-                    direccion: direccion,
-                    fecha_hora: fechaHora
+                    telefono: telefonoContacto,
+                    tipo: 'Revisión General',
+                    direccion: direccionFinal,
+                    fecha_hora: null // La empresa asignará la fecha manualmente
                 };
 
                 const responseSoporte = await agendarCita(payload);
 
-                if (responseSoporte.status === 409) {
-                    await msg.reply('⚠️ Ese horario ya está reservado. Por favor, intenta con otro momento.');
-                    if (tipoSoporte === 'Revisión') {
-                        await msg.reply("🗓️ ¿Para qué *fecha y hora* le gustaría agendar la revisión?");
-                        sesiones[chat].paso = 'recibiendo_fecha_revision';
-                    } else {
-                        await msg.reply("📍 Indíquenos la *dirección exacta* de la fuga o daño.");
-                        sesiones[chat].paso = 'recibiendo_direccion_soporte';
-                    }
-                    return;
-                }
+                if (responseSoporte.ok) {
+                    const resumenCita = `✅ *SOLICITUD RECIBIDA*\n\n` +
+                        `👤 *Nombre:* ${nombre}\n` +
+                        `📍 *Dirección:* ${direccionOriginal}\n` +
+                        `📱 *Teléfono:* ${telefonoContacto}\n\n` +
+                        `¡Cooaguas recibió su petición! 💧\nSe le informará por este medio apenas su cita sea programada por uno de nuestros agentes.`;
 
-                if (!responseSoporte.ok) {
+                    await msg.reply(resumenCita + OPCIONES_NAVEGACION);
+                    sesiones[chat] = { paso: 'esperando_decision' };
+                } else {
                     throw new Error(`Error en API citas: HTTP ${responseSoporte.status}`);
                 }
-
-                const resumenCita = tipoSoporte === 'Urgencia'
-                    ? `🚨 *REPORTE DE EMERGENCIA RECIBIDO*\n\nHemos notificado a nuestros técnicos. Se dirigirán al lugar a la brevedad posible.`
-                    : `✅ *REVISIÓN AGENDADA*\n\nSu cita quedó registrada para el: *${fechaHora}*.\nNuestros técnicos visitarán su domicilio en ese horario.`;
-
-                await msg.reply(resumenCita + OPCIONES_NAVEGACION);
-                sesiones[chat] = { paso: 'esperando_decision' };
 
             } catch (error) {
                 console.error("❌ Error consumiendo API citas:", error.message);
@@ -352,7 +392,7 @@ client.on('message', async (msg) => {
     }
 });
 
-// --- 5. COMANDO DEL ASESOR: !liberar ---
+// --- 5. COMANDO DEL ASESOR: !atendido ---
 // El asesor escribe este comando EN EL CHAT DEL CLIENTE directamente desde el WhatsApp
 // para devolver el control al bot cuando termina la atención.
 client.on('message_create', async (msg) => {
@@ -362,7 +402,7 @@ client.on('message_create', async (msg) => {
     const texto = msg.body.trim().toLowerCase();
     const chat = msg.to; // El destinatario = número del cliente
 
-    if (texto === '!liberar') {
+    if (texto === '!atendido') {
         if (chatsModoHumano.has(chat)) {
             await liberarChat(chat, false);
         }

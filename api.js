@@ -1,4 +1,4 @@
-const BASE_URL = 'https://cooaguas.onrender.com';
+const BASE_URL = 'http://127.0.0.1:3000';
 
 async function consultarCliente(nuid) {
     const controller = new AbortController();
