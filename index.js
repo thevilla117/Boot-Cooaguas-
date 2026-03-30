@@ -210,7 +210,7 @@ client.on('message', async (msg) => {
             "¿En qué podemos ayudarte hoy?\n\n" +
             "1️⃣ *Consultar Factura* (Saldo y fechas)\n" +
             "2️⃣ *Agendar cita de revisión*\n" +
-            "3️⃣ *Atención al Cliente o reportar daños*\n\n" +
+            "3️⃣ *Atención al Cliente*\n\n" +
             "*(Responde con el número de la opción)*";
         await msg.reply(bienvenida);
         sesiones[chat] = { paso: 'menu_principal' };
@@ -231,10 +231,10 @@ client.on('message', async (msg) => {
         // ─── MENÚ ────────────────────────────────────────────
         case 'menu_principal':
             if (texto === '1') {
-                await msg.reply("🔍 Por favor, digite su *Código de Cliente*.");
+                await msg.reply("🔍 Por favor, digite su *Código de Cliente*.\n\n*(Escribe 0️⃣ para regresar al menú)*");
                 sesiones[chat].paso = 'consultando_factura';
             } else if (texto === '2') {
-                await msg.reply("🗓️ *PROGRAMACIÓN DE CITA*\n\n👤 Por favor, indíquenos su *Nombre Completo* para registrar la visita.");
+                await msg.reply("🗓️ *PROGRAMACIÓN DE CITA*\n\n👤 Por favor, indíquenos su *Nombre Completo* para registrar la visita.\n\n*(Escribe 0️⃣ para regresar al menú)*");
                 sesiones[chat].paso = 'recibiendo_nombre_soporte';
             } else if (texto === '3') {
                 // El bot se pausa: modo humano activado para este chat
@@ -257,6 +257,10 @@ client.on('message', async (msg) => {
 
         // ─── CONSULTA DE FACTURA (Vía API REST) ────────────────
         case 'consultando_factura':
+            if (texto === '0') {
+                await mostrarMenu();
+                return;
+            }
             try {
                 // Usamos msg.body.trim() para preservar mayúsculas/minúsculas del código
                 const codigoCliente = msg.body.trim();
@@ -335,18 +339,30 @@ client.on('message', async (msg) => {
             break;
 
         case 'recibiendo_nombre_soporte':
+            if (texto === '0') {
+                await mostrarMenu();
+                return;
+            }
             sesiones[chat].nombreCita = msg.body.trim();
             await msg.reply("📍 Ahora, por favor envíanos la *dirección exacta* para la visita.");
             sesiones[chat].paso = 'recibiendo_direccion_soporte';
             break;
 
         case 'recibiendo_direccion_soporte':
+            if (texto === '0') {
+                await mostrarMenu();
+                return;
+            }
             sesiones[chat].direccionCita = msg.body.trim();
             await msg.reply("📱 Por último, indícanos un *número de teléfono* de contacto (celular o fijo).");
             sesiones[chat].paso = 'recibiendo_telefono_soporte';
             break;
 
         case 'recibiendo_telefono_soporte':
+            if (texto === '0') {
+                await mostrarMenu();
+                return;
+            }
             try {
                 const telefonoContacto = msg.body.trim();
                 const direccionOriginal = sesiones[chat].direccionCita;
