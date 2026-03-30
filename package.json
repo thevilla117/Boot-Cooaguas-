@@ -13,8 +13,10 @@
   "type": "commonjs",
   "dependencies": {
     "express": "^5.2.1",
+    "luxon": "^3.7.2",
     "pg": "^8.20.0",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js"
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js",
+    "dotenv": "^16.4.5"
   }
 }

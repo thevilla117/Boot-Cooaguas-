@@ -1,4 +1,5 @@
-const BASE_URL = 'http://127.0.0.1:3000';
+require('dotenv').config();
+const BASE_URL = process.env.API_URL || 'http://127.0.0.1:3000';
 
 async function consultarCliente(nuid) {
     const controller = new AbortController();

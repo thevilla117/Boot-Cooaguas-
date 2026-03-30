@@ -1,10 +1,11 @@
+require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { consultarCliente, agendarCita } = require('./api');
 const { interpretarFecha, formatearParaAPI, esHoraValida } = require('./utils');
 const express = require('express');
 
-// --- 1. CONFIGURACIÓN DEL SERVIDOR WEB (Obligatorio para Web Services de Render) ---
+// --- 1. CONFIGURACIÓN DEL SERVIDOR WEB ---
 const app = express();
 const port = process.env.PORT || 3005;
 
@@ -91,6 +92,9 @@ const client = new Client({
 
 // Memoria temporal de los usuarios
 let sesiones = {};
+
+// Estado global del bot (para !detener y !encender)
+let botActivado = true;
 
 // Chats en modo humano: el bot NO responderá en estos chats
 // hasta que el asesor escriba !atendido o pasen 10 minutos
@@ -186,6 +190,11 @@ client.on('message', async (msg) => {
         return;
     }
     controlSpam.set(chat, Date.now());
+
+    // SI EL BOT ESTÁ DESACTIVADO, no responde a mensajes de otros
+    if (!botActivado) {
+        return;
+    }
 
     // Si este chat está siendo atendido por un asesor, el bot se queda callado
     if (chatsModoHumano.has(chat)) return;
@@ -406,6 +415,19 @@ client.on('message_create', async (msg) => {
         if (chatsModoHumano.has(chat)) {
             await liberarChat(chat, false);
         }
+    }
+
+    // COMANDOS DE CONTROL GLOBAL (Solo para el dueño)
+    if (texto === '!detener') {
+        botActivado = false;
+        await client.sendMessage(msg.to, "🛑 *BOT DESACTIVADO*: El asistente virtual dejará de responder mensajes automáticos hasta que envíes !encender.");
+        console.log("\n🛑 El bot ha sido DESACTIVADO mediante comando !detener.\n");
+    }
+
+    if (texto === '!encender') {
+        botActivado = true;
+        await client.sendMessage(msg.to, "✅ *BOT ACTIVADO*: El asistente virtual de Cooaguas está nuevamente en línea.");
+        console.log("\n✅ El bot ha sido ACTIVADO mediante comando !encender.\n");
     }
 });
 
