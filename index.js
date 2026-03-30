@@ -218,7 +218,7 @@ client.on('message', async (msg) => {
 
     // --- MENÚ PRINCIPAL (sin sesión activa) ---
     if (!sesiones[chat]) {
-        if (/^(hola|buenas|hey|menu|menú|inicio)/i.test(texto)) {
+        if (/^(hola|buenas|hey|menu|menú|inicio|cita)/i.test(texto)) {
             await mostrarMenu();
         }
         return;
